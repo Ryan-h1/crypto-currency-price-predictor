@@ -16,3 +16,9 @@ source venv/bin/activate
 ```shell
 pip install -r requirements.txt
 ```
+
+### 3. Populate Environment Variables
+
+```shell
+cp .env.example .env
+```

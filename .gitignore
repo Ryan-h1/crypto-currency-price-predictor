@@ -40,6 +40,9 @@ wheels/
 logs/
 *.log
 
+# csv files
+*.csv
+
 # Environment variables
 .env
 .venv
