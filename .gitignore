@@ -46,3 +46,7 @@ logs/
 # Environment variables
 .env
 .venv
+
+models/saved/*
+models/quick/*
+.DS_Store

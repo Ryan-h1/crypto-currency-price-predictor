@@ -3,7 +3,7 @@ import logging
 import sys
 from dotenv import load_dotenv
 
-NUMBER_OF_TOP_COINS_TO_COLLECT = 500
+NUMBER_OF_TOP_COINS_TO_COLLECT = 2000
 DAYS_OF_HISTORY_TO_COLLECT = 365
 
 SCRIPT_PATH = os.path.abspath(__file__)

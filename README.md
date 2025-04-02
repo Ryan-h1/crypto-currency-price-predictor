@@ -1,3 +1,5 @@
+# Crypto Currency Price Predictor
+
 ## Requirements
 
 - Python 3.12
