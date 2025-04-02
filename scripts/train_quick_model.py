@@ -19,8 +19,9 @@ import logging
 # Add project root to the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import StablecoinFilter
-from src import StablecoinFilter
+# Import modules
+from src.data import StablecoinFilter
+from src.features import CryptoFeatureEngineer
 
 
 def parse_args():
@@ -46,7 +47,7 @@ def parse_args():
     parser.add_argument('--test_size', type=float, default=0.1,
                         help='Proportion of coins to use for testing (default: 0.1)')
 
-    parser.add_argument('--max_coins', type=int, default=100,
+    parser.add_argument('--max_coins', type=int, default=1000,
                         help='Maximum number of coins to use (for faster training)')
 
     parser.add_argument('--selection', type=str, default='train-leader-test-follower',
@@ -55,6 +56,11 @@ def parse_args():
 
     parser.add_argument('--filter_stablecoins', type=bool, default=True,
                         help='Whether to filter out stablecoins from the dataset')
+
+    parser.add_argument('--feature_set', type=str, default='standard',
+                        choices=['minimal', 'standard', 'full'],
+                        help='Feature set to use for training (minimal: few basic features, '
+                             'standard: balanced set of features, full: all available features)')
 
     return parser.parse_args()
 
@@ -74,45 +80,6 @@ def load_and_process_coin(file_path, days_ahead, threshold):
         df['future_price'] = df['price'].shift(-days_ahead)
         df['price_change_pct'] = (df['future_price'] - df['price']) / df['price']
         df['target'] = (df['price_change_pct'] > threshold).astype(int)
-
-        # Add minimal features (only the most reliable ones)
-
-        # Price moving averages (only two)
-        df['ma7'] = df['price'].rolling(window=7).mean()
-        df['ma30'] = df['price'].rolling(window=30).mean()
-
-        # Price to moving average ratios - with safety checks
-        df['price_to_ma7'] = np.where(df['ma7'] > 0, df['price'] / df['ma7'], 1.0)
-        df['price_to_ma30'] = np.where(df['ma30'] > 0, df['price'] / df['ma30'], 1.0)
-
-        # Simple returns
-        df['weekly_return'] = df['price'].pct_change(7)
-
-        # Simple volume features - with safety checks
-        volume_ma7 = df['volume'].rolling(window=7).mean()
-        df['volume_to_ma7'] = np.where(volume_ma7 > 0, df['volume'] / volume_ma7, 1.0)
-
-        # Clean up data - replace inf/NaN
-        for col in df.columns:
-            if col not in ['date', 'price', 'market_cap', 'volume', 'coin_id', 'future_price', 'target']:
-                # First replace infinities
-                df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-
-                # Then handle NaNs
-                non_nan_values = df[col].dropna()
-                if len(non_nan_values) > 0:  # Only calculate median if we have non-NaN values
-                    median_val = non_nan_values.median()
-                    df[col] = df[col].fillna(median_val)
-                else:
-                    # If all values are NaN, fill with 0
-                    df[col] = df[col].fillna(0)
-
-        # Remove rows with NaN in critical columns
-        df = df.dropna(
-            subset=['target', 'ma7', 'ma30', 'price_to_ma7', 'price_to_ma30', 'weekly_return', 'volume_to_ma7'])
-
-        if len(df) < 30:  # Skip if too many rows were removed
-            return None
 
         # Add coin identifier from filename
         coin_id = os.path.basename(file_path).replace('coin_', '').replace('.csv', '')
@@ -246,20 +213,24 @@ def train_quick_model(args):
     # Combine all data
     combined_df = pd.concat(all_coin_data, ignore_index=True)
 
+    # Add features using the feature engineering module
+    logger.info(f"Adding features using feature set: {args.feature_set}")
+    feature_engineer = CryptoFeatureEngineer()
+
+    # Add features to the combined dataframe
+    combined_df = feature_engineer.add_all_features(combined_df, drop_na=True)
+
+    # Get selected features based on the chosen feature set
+    feature_cols = feature_engineer.get_selected_features(combined_df, args.feature_set)
+
+    logger.info(f"Selected {len(feature_cols)} features: {', '.join(feature_cols[:10])}...")
+
     # Split into train and test sets
     train_df = combined_df[combined_df['coin_id'].isin(train_coins)]
     test_df = combined_df[combined_df['coin_id'].isin(test_coins)]
 
     logger.info(f"Training data: {len(train_df)} rows")
     logger.info(f"Testing data: {len(test_df)} rows")
-
-    # Define features
-    feature_cols = [
-        'ma7', 'ma30',
-        'price_to_ma7', 'price_to_ma30',
-        'weekly_return',
-        'volume_to_ma7'
-    ]
 
     # Prepare data
     X_train = train_df[feature_cols]
@@ -432,7 +403,8 @@ def train_quick_model(args):
         'train_coins': train_coins,
         'test_coins': test_coins,
         'coin_results': coin_results,
-        'selection_method': args.selection
+        'selection_method': args.selection,
+        'feature_set': args.feature_set
     }
 
     # Save detailed results
