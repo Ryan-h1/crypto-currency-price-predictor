@@ -15,6 +15,7 @@ import seaborn as sns
 import joblib
 from datetime import datetime
 import logging
+import xgboost as xgb
 
 # Add project root to the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,7 +42,7 @@ def parse_args():
                         help='Price increase threshold (e.g., 0.15 = 15%)')
 
     parser.add_argument('--model_type', type=str, default='logistic',
-                        choices=['random_forest', 'logistic'],
+                        choices=['random_forest', 'logistic', 'xgboost'],
                         help='Type of model to train')
 
     parser.add_argument('--test_size', type=float, default=0.1,
@@ -61,6 +62,11 @@ def parse_args():
                         choices=['minimal', 'standard', 'full'],
                         help='Feature set to use for training (minimal: few basic features, '
                              'standard: balanced set of features, full: all available features)')
+
+    parser.add_argument('--validation', type=str, default='coin_split',
+                        choices=['coin_split', 'walk_forward'],
+                        help='Validation strategy: coin_split (train on some coins, test on others) or '
+                             'walk_forward (train on earlier data, test on later data)')
 
     return parser.parse_args()
 
@@ -255,6 +261,18 @@ def train_quick_model(args):
             max_depth=8,  # Limit depth to prevent overfitting
             min_samples_leaf=5,
             class_weight='balanced',
+            random_state=42
+        )
+    elif args.model_type == 'xgboost':
+        model = xgb.XGBClassifier(
+            n_estimators=100,
+            max_depth=6,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_weight=3,
+            objective='binary:logistic',
+            scale_pos_weight=len(y_train) / y_train.sum() - 1,  # Adjust for class imbalance
             random_state=42
         )
     else:  # logistic
