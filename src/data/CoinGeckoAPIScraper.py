@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 import time
-
+import os
 from logging import Logger
 from typing import Dict, Any
 
@@ -50,18 +50,34 @@ class CoinGeckoAPIScraper:
         query_params = {
             "vs_currency": currency,
             "order": "market_cap_desc",
-            "per_page": limit,
+            "per_page": 100,  # API maximum per page
             "page": 1,
             "sparkline": False
         }
 
-        response = self._make_request("coins/markets", query_params)
+        coin_list_df = pd.DataFrame()
+        all_coins = []
 
-        coin_list_df = pd.DataFrame(response)
+        if limit > 100:
+            # CoinGecko API only allows up to 100 coins per page, so let's split the request into multiple pages
+            pages_needed = (limit + 99) // 100  # Ceiling division
+            
+            for page in range(1, pages_needed + 1):
+                query_params["page"] = page
+                response = self._make_request("coins/markets", query_params)
+                all_coins.extend(response)
+                coin_list_df = pd.concat([coin_list_df, pd.DataFrame(response)])
+                self.logger.debug(f"Retrieved page {page}/{pages_needed} with {len(response)} coins")
+                time.sleep(1)  # Add delay to avoid rate limiting
+        else:
+            response = self._make_request("coins/markets", query_params)
+            all_coins = response
+            coin_list_df = pd.DataFrame(response)
+
         coin_list_df.to_csv(f"{self.output_dir}/coin_list.csv", index=False)
 
-        self.logger.debug(f"Successfully retrieved {len(response)} coins")
-        return response
+        self.logger.info(f"Successfully retrieved top {len(all_coins)} coins")
+        return all_coins
 
     def get_historical_data(self, coin_id: str, days: int = 365,
                             currency: str = "usd", interval: str = "daily") -> Dict:
@@ -106,14 +122,20 @@ class CoinGeckoAPIScraper:
         final_df.to_csv(output_file, index=False)
         self.logger.info(f"Saved historical data for {coin_id} to {output_file}")
 
-    def collect_all_data(self, number_of_top_coins: int = 50, days: int = 365) -> None:
+    def collect_all_data(self, number_of_top_coins: int = 50, days: int = 365, replace_if_exists: bool = True) -> None:
         """Collect historical data for all top coins and save to CSVs."""
         # Get top IDs by market cap
+        self.logger.info(f"Collecting data for top {number_of_top_coins} coins")
         top_coins = self.get_top_coins(limit=number_of_top_coins)
 
         for coin in top_coins:
             coin_id = coin["id"]
             try:
+                if not replace_if_exists:
+                    if os.path.exists(f"{self.output_dir}/coin_{coin_id}.csv"):
+                        self.logger.info(f"Skipping {coin_id} because it already exists")
+                        continue
+
                 historical_data = self.get_historical_data(coin_id=coin_id, days=days)
                 self.process_and_save_historical_data(coin_id=coin_id, data=historical_data)
                 # Pause for 1 second to avoid hitting rate limits

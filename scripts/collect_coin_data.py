@@ -3,7 +3,7 @@ import logging
 import sys
 from dotenv import load_dotenv
 
-NUMBER_OF_TOP_COINS_TO_COLLECT = 20
+NUMBER_OF_TOP_COINS_TO_COLLECT = 500
 DAYS_OF_HISTORY_TO_COLLECT = 365
 
 SCRIPT_PATH = os.path.abspath(__file__)
@@ -37,4 +37,4 @@ scraper = CoinGeckoAPIScraper(
 )
 
 # Run the collection process
-scraper.collect_all_data(number_of_top_coins=NUMBER_OF_TOP_COINS_TO_COLLECT, days=DAYS_OF_HISTORY_TO_COLLECT)
+scraper.collect_all_data(number_of_top_coins=NUMBER_OF_TOP_COINS_TO_COLLECT, days=DAYS_OF_HISTORY_TO_COLLECT, replace_if_exists=False)
