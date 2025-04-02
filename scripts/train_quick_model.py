@@ -20,8 +20,8 @@ import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import modules
-from src.data.StablecoinFilter import StablecoinFilter
-from src.features.crypto_feature_engineering import CryptoFeatureEngineer
+from src.data import StablecoinFilter
+from src.features import CryptoFeatureEngineer
 
 
 def parse_args():
@@ -56,10 +56,10 @@ def parse_args():
 
     parser.add_argument('--filter_stablecoins', type=bool, default=True,
                         help='Whether to filter out stablecoins from the dataset')
-                        
+
     parser.add_argument('--feature_set', type=str, default='standard',
                         choices=['minimal', 'standard', 'full'],
-                        help='Feature set to use for training (minimal: few basic features, ' 
+                        help='Feature set to use for training (minimal: few basic features, '
                              'standard: balanced set of features, full: all available features)')
 
     return parser.parse_args()
@@ -212,17 +212,17 @@ def train_quick_model(args):
 
     # Combine all data
     combined_df = pd.concat(all_coin_data, ignore_index=True)
-    
+
     # Add features using the feature engineering module
     logger.info(f"Adding features using feature set: {args.feature_set}")
     feature_engineer = CryptoFeatureEngineer()
-    
+
     # Add features to the combined dataframe
     combined_df = feature_engineer.add_all_features(combined_df, drop_na=True)
-    
+
     # Get selected features based on the chosen feature set
     feature_cols = feature_engineer.get_selected_features(combined_df, args.feature_set)
-    
+
     logger.info(f"Selected {len(feature_cols)} features: {', '.join(feature_cols[:10])}...")
 
     # Split into train and test sets

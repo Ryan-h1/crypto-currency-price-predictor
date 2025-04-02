@@ -9,7 +9,6 @@ import sys
 import pandas as pd
 import logging
 import argparse
-from typing import List
 
 # Add project root to the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
