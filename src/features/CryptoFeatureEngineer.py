@@ -61,6 +61,10 @@ class CryptoFeatureEngineer:
         result_df = self.add_volatility_features(result_df, drop_na=False)
         result_df = self.add_momentum_features(result_df, drop_na=False)
         result_df = self.add_technical_indicators(result_df, drop_na=False)
+        # result_df = self.add_candle_features(result_df, drop_na=False)
+        # result_df = self.add_trend_features(result_df, drop_na=False)
+        # result_df = self.add_obv_feature(result_df, drop_na=False)
+        # result_df = self.add_breakout_strength(result_df, window=20, drop_na=False)
 
         # Drop NaN values at the end if requested
         if drop_na:
@@ -454,6 +458,85 @@ class CryptoFeatureEngineer:
         if drop_na:
             indicator_cols = [col for col in result_df.columns if col not in df.columns]
             result_df = result_df.dropna(subset=indicator_cols)
+
+        return result_df
+
+    def add_candle_features(self, df: pd.DataFrame, drop_na: bool = True) -> pd.DataFrame:
+        result_df = df.copy()
+
+        if all(col in df.columns for col in ['open', 'high', 'low', 'close']):
+            result_df['candle_body'] = result_df['close'] - result_df['open']
+            result_df['candle_range'] = result_df['high'] - result_df['low']
+            result_df['upper_shadow'] = result_df['high'] - result_df[['close', 'open']].max(axis=1)
+            result_df['lower_shadow'] = result_df[['close', 'open']].min(axis=1) - result_df['low']
+
+            for col in ['candle_body', 'candle_range', 'upper_shadow', 'lower_shadow']:
+                result_df[col] = result_df[col].replace([np.inf, -np.inf], np.nan).ffill().fillna(0)
+
+            if drop_na:
+                result_df = result_df.dropna(subset=['candle_body', 'candle_range', 'upper_shadow', 'lower_shadow'])
+
+        return result_df
+
+    def add_trend_features(self, df: pd.DataFrame, drop_na: bool = True) -> pd.DataFrame:
+        result_df = df.copy()
+        result_df['price_diff'] = result_df['price'].diff()
+        result_df['price_direction'] = np.sign(result_df['price_diff'])
+        result_df['price_direction_smooth'] = result_df['price_direction'].rolling(window=5, min_periods=1).mean()
+        
+        if drop_na:
+            result_df = result_df.dropna(subset=['price_diff', 'price_direction', 'price_direction_smooth'])
+    
+        return result_df
+
+    def add_obv_feature(self, df: pd.DataFrame, drop_na: bool = True) -> pd.DataFrame:
+        """
+        Add On-Balance Volume (OBV) indicator to the dataframe.
+ 
+        Args:
+            df: DataFrame with 'price' and 'volume' columns
+            drop_na: Whether to drop rows with NaN values
+ 
+        Returns:
+            DataFrame with OBV feature added
+        """
+        result_df = df.copy()
+        result_df['price_change'] = result_df['price'].diff()
+        direction = np.sign(result_df['price_change']).fillna(0)
+        result_df['obv'] = (direction * result_df['volume']).cumsum()
+        result_df['obv'] = result_df['obv'].replace([np.inf, -np.inf], np.nan).ffill().fillna(0)
+        if drop_na:
+            result_df = result_df.dropna(subset=['obv'])
+        return result_df
+
+    def add_breakout_strength(self, df: pd.DataFrame, window: int = 20, drop_na: bool = True) -> pd.DataFrame:
+        """
+        Adds a trend breakout strength feature that captures price deviation from a rolling price range.
+        
+        Args:
+            df: DataFrame with 'price' column
+            window: Number of periods for rolling high/low
+            drop_na: Whether to drop rows with NaN
+        
+        Returns:
+            DataFrame with breakout_strength feature added
+        """
+        result_df = df.copy()
+        high = result_df['price'].rolling(window).max()
+        low = result_df['price'].rolling(window).min()
+        range_ = high - low
+
+        # Normalize the distance from the high/low
+        result_df['breakout_strength'] = np.where(
+            range_ > 0,
+            (result_df['price'] - low) / range_,
+            0.5
+        )
+
+        result_df['breakout_strength'] = result_df['breakout_strength'].clip(0, 1)
+
+        if drop_na:
+            result_df = result_df.dropna(subset=['breakout_strength'])
 
         return result_df
 
