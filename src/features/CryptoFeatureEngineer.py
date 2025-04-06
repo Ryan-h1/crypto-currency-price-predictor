@@ -479,7 +479,7 @@ class CryptoFeatureEngineer:
             # Return a minimal set of columns that should be available
             safe_columns = [col for col in available_cols if col not in [
                 'date', 'price', 'volume', 'market_cap', 'coin_id',
-                'future_price', 'target', 'daily_return'
+                'future_price', 'target', 'daily_return', 'price_change_pct'
             ]]
             return safe_columns[:10] if len(safe_columns) > 10 else safe_columns
 
@@ -511,10 +511,11 @@ class CryptoFeatureEngineer:
             ]
 
         else:  # 'full'
-            # All features except raw/duplicate/auxiliary columns
+            # All features except raw/duplicate/auxiliary columns and target-related columns
+            # CRITICAL: We must exclude price_change_pct to avoid data leakage
             exclude_cols = [
                 'date', 'price', 'volume', 'market_cap', 'coin_id',
-                'future_price', 'target', 'daily_return',
+                'future_price', 'target', 'daily_return', 'price_change_pct',
                 'bb_middle', 'bb_std', 'bb_upper', 'bb_lower', 'macd_signal'
             ]
             selected_features = [col for col in available_cols if col not in exclude_cols]
@@ -527,7 +528,7 @@ class CryptoFeatureEngineer:
             # Get all potentially useful features
             additional_features = [col for col in available_cols if col not in [
                 'date', 'price', 'volume', 'market_cap', 'coin_id',
-                'future_price', 'target', 'daily_return'
+                'future_price', 'target', 'daily_return', 'price_change_pct'
             ] and col not in valid_features]
 
             # Add some additional features if needed
