@@ -1,0 +1,5 @@
+{
+  "sequence_length": 30,
+  "units": 64,
+  "dropout": 0.2
+}
