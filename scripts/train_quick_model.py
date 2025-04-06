@@ -16,6 +16,11 @@ import joblib
 from datetime import datetime
 import logging
 import xgboost as xgb
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping
 
 # Add project root to the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,13 +47,13 @@ def parse_args():
                         help='Price increase threshold (e.g., 0.15 = 15%)')
 
     parser.add_argument('--model_type', type=str, default='logistic',
-                        choices=['random_forest', 'logistic', 'xgboost'],
+                        choices=['random_forest', 'logistic', 'xgboost', 'lstm'],
                         help='Type of model to train')
 
     parser.add_argument('--test_size', type=float, default=0.1,
                         help='Proportion of coins to use for testing (default: 0.1)')
 
-    parser.add_argument('--max_coins', type=int, default=1000,
+    parser.add_argument('--max_coins', type=int, default=2000,
                         help='Maximum number of coins to use (for faster training)')
 
     parser.add_argument('--selection', type=str, default='train-leader-test-follower',
@@ -67,6 +72,18 @@ def parse_args():
                         choices=['coin_split', 'walk_forward'],
                         help='Validation strategy: coin_split (train on some coins, test on others) or '
                              'walk_forward (train on earlier data, test on later data)')
+
+    parser.add_argument('--lstm_units', type=int, default=64,
+                        help='Number of LSTM units (only used when model_type is lstm)')
+
+    parser.add_argument('--lstm_dropout', type=float, default=0.2,
+                        help='Dropout rate for LSTM layers (only used when model_type is lstm)')
+
+    parser.add_argument('--lstm_epochs', type=int, default=50,
+                        help='Number of epochs for LSTM training (only used when model_type is lstm)')
+
+    parser.add_argument('--lstm_sequence_length', type=int, default=30,
+                        help='Sequence length for LSTM input (only used when model_type is lstm)')
 
     return parser.parse_args()
 
@@ -151,6 +168,28 @@ def create_leader_follower_split(coin_stats, test_size):
     print(f"  Test (from bottom half): {len(test_coins)} coins, Avg Market Cap: ${avg_test_mcap:.2f}")
 
     return train_coins, test_coins
+
+
+def prepare_lstm_data(X, y, sequence_length):
+    """
+    Prepare data for LSTM model by creating sequences.
+    
+    Args:
+        X: Feature data
+        y: Target data
+        sequence_length: Length of sequences to create
+        
+    Returns:
+        X_sequences, y_sequences
+    """
+    X_sequences = []
+    y_sequences = []
+    
+    for i in range(len(X) - sequence_length):
+        X_sequences.append(X[i:i + sequence_length])
+        y_sequences.append(y[i + sequence_length])
+    
+    return np.array(X_sequences), np.array(y_sequences)
 
 
 def train_quick_model(args):
@@ -263,6 +302,12 @@ def train_quick_model(args):
             class_weight='balanced',
             random_state=42
         )
+        model.fit(X_train_scaled, y_train)
+        
+        # Evaluate
+        y_train_pred = model.predict(X_train_scaled)
+        y_test_pred = model.predict(X_test_scaled)
+        
     elif args.model_type == 'xgboost':
         model = xgb.XGBClassifier(
             n_estimators=100,
@@ -275,6 +320,111 @@ def train_quick_model(args):
             scale_pos_weight=len(y_train) / y_train.sum() - 1,  # Adjust for class imbalance
             random_state=42
         )
+        model.fit(X_train_scaled, y_train)
+        
+        # Evaluate
+        y_train_pred = model.predict(X_train_scaled)
+        y_test_pred = model.predict(X_test_scaled)
+        
+    elif args.model_type == 'lstm':
+        # Prepare sequence data for LSTM
+        logger.info(f"Preparing sequence data for LSTM with sequence length {args.lstm_sequence_length}...")
+        
+        # Make sure we have enough data for the sequence length
+        if len(X_train) <= args.lstm_sequence_length:
+            logger.warning(f"Training data length ({len(X_train)}) is too short for sequence length ({args.lstm_sequence_length}). Reducing sequence length.")
+            args.lstm_sequence_length = max(5, len(X_train) // 3)
+            
+        X_train_seq, y_train_seq = prepare_lstm_data(X_train_scaled, y_train.values, args.lstm_sequence_length)
+        
+        # Check if we have enough data after sequence preparation
+        if len(X_train_seq) < 10:
+            logger.error("Not enough training data for LSTM after sequence preparation. Consider using a shorter sequence length or more data.")
+            raise ValueError("Insufficient data for LSTM training")
+            
+        # Build LSTM model
+        logger.info(f"Building LSTM model with {args.lstm_units} units and {args.lstm_dropout} dropout...")
+        
+        # Get input shape
+        input_shape = (args.lstm_sequence_length, X_train.shape[1])
+        
+        # Create model
+        model = Sequential([
+            LSTM(args.lstm_units, input_shape=input_shape, return_sequences=True),
+            Dropout(args.lstm_dropout),
+            LSTM(args.lstm_units // 2),
+            Dropout(args.lstm_dropout),
+            Dense(1, activation='sigmoid')
+        ])
+        
+        # Compile model
+        model.compile(
+            optimizer=Adam(learning_rate=0.001),
+            loss='binary_crossentropy',
+            metrics=['accuracy']
+        )
+        
+        # Early stopping
+        early_stopping = EarlyStopping(
+            monitor='val_loss',
+            patience=10,
+            restore_best_weights=True
+        )
+        
+        # Class weights to handle imbalance
+        class_weight = {
+            0: 1.0,
+            1: len(y_train_seq) / max(sum(y_train_seq), 1) - 1
+        }
+        
+        # Fit model
+        logger.info(f"Training LSTM model for up to {args.lstm_epochs} epochs...")
+        model.fit(
+            X_train_seq, y_train_seq,
+            epochs=args.lstm_epochs,
+            batch_size=32,
+            validation_split=0.2,
+            callbacks=[early_stopping],
+            class_weight=class_weight,
+            verbose=1
+        )
+        
+        # Prepare test sequences
+        X_test_seq, y_test_seq = prepare_lstm_data(X_test_scaled, y_test.values, args.lstm_sequence_length)
+        
+        # If we don't have enough test data for sequences, we need to handle it
+        if len(X_test_seq) == 0:
+            logger.warning("Not enough test data for LSTM evaluation with sequences. Using a different approach.")
+            # One approach: predict on the last {sequence_length} points of each test coin
+            y_test_pred = []
+            y_test_actual = []
+            
+            # Get predictions for each test coin separately
+            for coin in test_coins:
+                coin_data = test_df[test_df['coin_id'] == coin]
+                if len(coin_data) > args.lstm_sequence_length:
+                    X_coin = scaler.transform(coin_data[feature_cols])
+                    X_coin_seq = np.array([X_coin[-args.lstm_sequence_length:]])
+                    y_coin_pred = (model.predict(X_coin_seq) > 0.5).astype(int)
+                    y_test_pred.append(y_coin_pred[0][0])
+                    y_test_actual.append(coin_data['target'].iloc[-1])
+            
+            # If we still don't have predictions, we can't evaluate properly
+            if not y_test_pred:
+                logger.error("Cannot evaluate LSTM on test data - insufficient data.")
+                y_test_pred = np.zeros(len(y_test))
+                y_train_pred = model.predict(X_train_seq) > 0.5
+            else:
+                y_test_pred = np.array(y_test_pred)
+                y_test = np.array(y_test_actual)
+                
+                # For training predictions, use the sequences we already have
+                y_train_pred = model.predict(X_train_seq) > 0.5
+        else:
+            # Normal case - we have enough test data
+            y_test_pred = model.predict(X_test_seq) > 0.5
+            y_train_pred = model.predict(X_train_seq) > 0.5
+            y_test = y_test_seq
     else:  # logistic
         model = LogisticRegression(
             C=0.1,  # More regularization
@@ -282,17 +432,18 @@ def train_quick_model(args):
             max_iter=500,
             random_state=42
         )
-
-    logger.info(f"Training {args.model_type} model...")
-    model.fit(X_train_scaled, y_train)
+        model.fit(X_train_scaled, y_train)
+        
+        # Evaluate
+        y_train_pred = model.predict(X_train_scaled)
+        y_test_pred = model.predict(X_test_scaled)
 
     # Evaluate on training set
-    y_train_pred = model.predict(X_train_scaled)
     train_metrics = {
-        'accuracy': accuracy_score(y_train, y_train_pred),
-        'precision': precision_score(y_train, y_train_pred, zero_division=0),
-        'recall': recall_score(y_train, y_train_pred, zero_division=0),
-        'f1_score': f1_score(y_train, y_train_pred, zero_division=0)
+        'accuracy': accuracy_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred),
+        'precision': precision_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred, zero_division=0),
+        'recall': recall_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred, zero_division=0),
+        'f1_score': f1_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred, zero_division=0)
     }
 
     logger.info("Training Results:")
@@ -300,12 +451,11 @@ def train_quick_model(args):
         logger.info(f"  {metric.capitalize()}: {value:.4f}")
 
     # Evaluate on test set
-    y_test_pred = model.predict(X_test_scaled)
     test_metrics = {
-        'accuracy': accuracy_score(y_test, y_test_pred),
-        'precision': precision_score(y_test, y_test_pred, zero_division=0),
-        'recall': recall_score(y_test, y_test_pred, zero_division=0),
-        'f1_score': f1_score(y_test, y_test_pred, zero_division=0)
+        'accuracy': accuracy_score(y_test if args.model_type != 'lstm' else y_test_seq, y_test_pred),
+        'precision': precision_score(y_test if args.model_type != 'lstm' else y_test_seq, y_test_pred, zero_division=0),
+        'recall': recall_score(y_test if args.model_type != 'lstm' else y_test_seq, y_test_pred, zero_division=0),
+        'f1_score': f1_score(y_test if args.model_type != 'lstm' else y_test_seq, y_test_pred, zero_division=0)
     }
 
     logger.info("Test Results:")
@@ -314,29 +464,58 @@ def train_quick_model(args):
 
     # Evaluate per test coin
     coin_results = {}
-    for coin in test_coins:
-        coin_data = test_df[test_df['coin_id'] == coin]
-        if len(coin_data) > 0:
-            X_coin = coin_data[feature_cols]
-            y_coin = coin_data['target']
+    if args.model_type != 'lstm':
+        for coin in test_coins:
+            coin_data = test_df[test_df['coin_id'] == coin]
+            if len(coin_data) > 0:
+                X_coin = coin_data[feature_cols]
+                y_coin = coin_data['target']
 
-            X_coin_scaled = scaler.transform(X_coin)
-            y_coin_pred = model.predict(X_coin_scaled)
+                X_coin_scaled = scaler.transform(X_coin)
+                y_coin_pred = model.predict(X_coin_scaled)
 
-            # Get market cap for this coin
-            coin_market_cap = next((s['avg_market_cap'] for s in coin_stats if s['coin_id'] == coin), 0)
+                # Get market cap for this coin
+                coin_market_cap = next((s['avg_market_cap'] for s in coin_stats if s['coin_id'] == coin), 0)
 
-            coin_metrics = {
-                'accuracy': accuracy_score(y_coin, y_coin_pred),
-                'precision': precision_score(y_coin, y_coin_pred, zero_division=0),
-                'recall': recall_score(y_coin, y_coin_pred, zero_division=0),
-                'f1_score': f1_score(y_coin, y_coin_pred, zero_division=0),
-                'positives': int(y_coin.sum()),
-                'total': len(y_coin),
-                'market_cap': coin_market_cap
-            }
+                coin_metrics = {
+                    'accuracy': accuracy_score(y_coin, y_coin_pred),
+                    'precision': precision_score(y_coin, y_coin_pred, zero_division=0),
+                    'recall': recall_score(y_coin, y_coin_pred, zero_division=0),
+                    'f1_score': f1_score(y_coin, y_coin_pred, zero_division=0),
+                    'positives': int(y_coin.sum()),
+                    'total': len(y_coin),
+                    'market_cap': coin_market_cap
+                }
 
-            coin_results[coin] = coin_metrics
+                coin_results[coin] = coin_metrics
+    else:
+        # For LSTM, we need a different approach for per-coin evaluation
+        for coin in test_coins:
+            coin_data = test_df[test_df['coin_id'] == coin]
+            if len(coin_data) > args.lstm_sequence_length:
+                X_coin = scaler.transform(coin_data[feature_cols])
+                y_coin = coin_data['target'].values
+                
+                # Prepare sequences
+                X_coin_seq, y_coin_seq = prepare_lstm_data(X_coin, y_coin, args.lstm_sequence_length)
+                
+                if len(X_coin_seq) > 0:
+                    y_coin_pred = model.predict(X_coin_seq) > 0.5
+                    
+                    # Get market cap for this coin
+                    coin_market_cap = next((s['avg_market_cap'] for s in coin_stats if s['coin_id'] == coin), 0)
+                    
+                    coin_metrics = {
+                        'accuracy': accuracy_score(y_coin_seq, y_coin_pred),
+                        'precision': precision_score(y_coin_seq, y_coin_pred, zero_division=0),
+                        'recall': recall_score(y_coin_seq, y_coin_pred, zero_division=0),
+                        'f1_score': f1_score(y_coin_seq, y_coin_pred, zero_division=0),
+                        'positives': int(y_coin_seq.sum()),
+                        'total': len(y_coin_seq),
+                        'market_cap': coin_market_cap
+                    }
+                    
+                    coin_results[coin] = coin_metrics
 
     # Show best and worst performing test coins
     coin_f1_scores = [(coin, data['f1_score'], data['market_cap']) for coin, data in coin_results.items()]
@@ -357,7 +536,7 @@ def train_quick_model(args):
     # Create confusion matrix plot
     plt.figure(figsize=(8, 6))
     from sklearn.metrics import confusion_matrix
-    cm = confusion_matrix(y_test, y_test_pred)
+    cm = confusion_matrix(y_test if args.model_type != 'lstm' else y_test_seq, y_test_pred)
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
     plt.title('Test Set Confusion Matrix')
     plt.xlabel('Predicted')
@@ -367,7 +546,13 @@ def train_quick_model(args):
     os.makedirs(args.model_save_dir, exist_ok=True)
 
     # Save model and scaler
-    joblib.dump(model, os.path.join(args.model_save_dir, 'quick_model.joblib'))
+    if args.model_type == 'lstm':
+        # Save Keras model differently
+        model_path = os.path.join(args.model_save_dir, 'quick_model')
+        model.save(model_path)
+    else:
+        joblib.dump(model, os.path.join(args.model_save_dir, 'quick_model.joblib'))
+        
     joblib.dump(scaler, os.path.join(args.model_save_dir, 'quick_scaler.joblib'))
     joblib.dump(feature_cols, os.path.join(args.model_save_dir, 'quick_features.joblib'))
 
@@ -428,6 +613,16 @@ def train_quick_model(args):
     # Save detailed results
     with open(os.path.join(args.model_save_dir, 'quick_results.json'), 'w') as f:
         json.dump(results, f, indent=2)
+
+    # Save additional info for LSTM
+    if args.model_type == 'lstm':
+        lstm_params = {
+            'sequence_length': args.lstm_sequence_length,
+            'units': args.lstm_units,
+            'dropout': args.lstm_dropout
+        }
+        with open(os.path.join(args.model_save_dir, 'lstm_params.json'), 'w') as f:
+            json.dump(lstm_params, f, indent=2)
 
     logger.info(f"\nTraining completed in {time.time() - start_time:.2f} seconds")
     logger.info(f"Results saved to {args.model_save_dir}")
