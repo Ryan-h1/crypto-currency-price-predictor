@@ -16,11 +16,7 @@ import joblib
 from datetime import datetime
 import logging
 import xgboost as xgb
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
+import keras
 
 # Add project root to the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -184,11 +180,11 @@ def prepare_lstm_data(X, y, sequence_length):
     """
     X_sequences = []
     y_sequences = []
-    
+
     for i in range(len(X) - sequence_length):
         X_sequences.append(X[i:i + sequence_length])
         y_sequences.append(y[i + sequence_length])
-    
+
     return np.array(X_sequences), np.array(y_sequences)
 
 
@@ -303,11 +299,11 @@ def train_quick_model(args):
             random_state=42
         )
         model.fit(X_train_scaled, y_train)
-        
+
         # Evaluate
         y_train_pred = model.predict(X_train_scaled)
         y_test_pred = model.predict(X_test_scaled)
-        
+
     elif args.model_type == 'xgboost':
         model = xgb.XGBClassifier(
             n_estimators=100,
@@ -321,62 +317,64 @@ def train_quick_model(args):
             random_state=42
         )
         model.fit(X_train_scaled, y_train)
-        
+
         # Evaluate
         y_train_pred = model.predict(X_train_scaled)
         y_test_pred = model.predict(X_test_scaled)
-        
+
     elif args.model_type == 'lstm':
         # Prepare sequence data for LSTM
         logger.info(f"Preparing sequence data for LSTM with sequence length {args.lstm_sequence_length}...")
-        
+
         # Make sure we have enough data for the sequence length
         if len(X_train) <= args.lstm_sequence_length:
-            logger.warning(f"Training data length ({len(X_train)}) is too short for sequence length ({args.lstm_sequence_length}). Reducing sequence length.")
+            logger.warning(
+                f"Training data length ({len(X_train)}) is too short for sequence length ({args.lstm_sequence_length}). Reducing sequence length.")
             args.lstm_sequence_length = max(5, len(X_train) // 3)
-            
+
         X_train_seq, y_train_seq = prepare_lstm_data(X_train_scaled, y_train.values, args.lstm_sequence_length)
-        
+
         # Check if we have enough data after sequence preparation
         if len(X_train_seq) < 10:
-            logger.error("Not enough training data for LSTM after sequence preparation. Consider using a shorter sequence length or more data.")
+            logger.error(
+                "Not enough training data for LSTM after sequence preparation. Consider using a shorter sequence length or more data.")
             raise ValueError("Insufficient data for LSTM training")
-            
+
         # Build LSTM model
         logger.info(f"Building LSTM model with {args.lstm_units} units and {args.lstm_dropout} dropout...")
-        
+
         # Get input shape
         input_shape = (args.lstm_sequence_length, X_train.shape[1])
-        
+
         # Create model
-        model = Sequential([
-            LSTM(args.lstm_units, input_shape=input_shape, return_sequences=True),
-            Dropout(args.lstm_dropout),
-            LSTM(args.lstm_units // 2),
-            Dropout(args.lstm_dropout),
-            Dense(1, activation='sigmoid')
+        model = keras.Sequential([
+            keras.layers.LSTM(args.lstm_units, input_shape=input_shape, return_sequences=True),
+            keras.layers.Dropout(args.lstm_dropout),
+            keras.layers.LSTM(args.lstm_units // 2),
+            keras.layers.Dropout(args.lstm_dropout),
+            keras.layers.Dense(1, activation='sigmoid')
         ])
-        
+
         # Compile model
         model.compile(
-            optimizer=Adam(learning_rate=0.001),
+            optimizer=keras.optimizers.Adam(learning_rate=0.001),
             loss='binary_crossentropy',
             metrics=['accuracy']
         )
-        
+
         # Early stopping
-        early_stopping = EarlyStopping(
+        early_stopping = keras.callbacks.EarlyStopping(
             monitor='val_loss',
             patience=10,
             restore_best_weights=True
         )
-        
+
         # Class weights to handle imbalance
         class_weight = {
             0: 1.0,
             1: len(y_train_seq) / max(sum(y_train_seq), 1) - 1
         }
-        
+
         # Fit model
         logger.info(f"Training LSTM model for up to {args.lstm_epochs} epochs...")
         model.fit(
@@ -388,17 +386,17 @@ def train_quick_model(args):
             class_weight=class_weight,
             verbose=1
         )
-        
+
         # Prepare test sequences
         X_test_seq, y_test_seq = prepare_lstm_data(X_test_scaled, y_test.values, args.lstm_sequence_length)
-        
+
         # If we don't have enough test data for sequences, we need to handle it
         if len(X_test_seq) == 0:
             logger.warning("Not enough test data for LSTM evaluation with sequences. Using a different approach.")
             # One approach: predict on the last {sequence_length} points of each test coin
             y_test_pred = []
             y_test_actual = []
-            
+
             # Get predictions for each test coin separately
             for coin in test_coins:
                 coin_data = test_df[test_df['coin_id'] == coin]
@@ -408,7 +406,7 @@ def train_quick_model(args):
                     y_coin_pred = (model.predict(X_coin_seq) > 0.5).astype(int)
                     y_test_pred.append(y_coin_pred[0][0])
                     y_test_actual.append(coin_data['target'].iloc[-1])
-            
+
             # If we still don't have predictions, we can't evaluate properly
             if not y_test_pred:
                 logger.error("Cannot evaluate LSTM on test data - insufficient data.")
@@ -417,7 +415,7 @@ def train_quick_model(args):
             else:
                 y_test_pred = np.array(y_test_pred)
                 y_test = np.array(y_test_actual)
-                
+
                 # For training predictions, use the sequences we already have
                 y_train_pred = model.predict(X_train_seq) > 0.5
         else:
@@ -433,7 +431,7 @@ def train_quick_model(args):
             random_state=42
         )
         model.fit(X_train_scaled, y_train)
-        
+
         # Evaluate
         y_train_pred = model.predict(X_train_scaled)
         y_test_pred = model.predict(X_test_scaled)
@@ -441,7 +439,8 @@ def train_quick_model(args):
     # Evaluate on training set
     train_metrics = {
         'accuracy': accuracy_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred),
-        'precision': precision_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred, zero_division=0),
+        'precision': precision_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred,
+                                     zero_division=0),
         'recall': recall_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred, zero_division=0),
         'f1_score': f1_score(y_train if args.model_type != 'lstm' else y_train_seq, y_train_pred, zero_division=0)
     }
@@ -495,16 +494,16 @@ def train_quick_model(args):
             if len(coin_data) > args.lstm_sequence_length:
                 X_coin = scaler.transform(coin_data[feature_cols])
                 y_coin = coin_data['target'].values
-                
+
                 # Prepare sequences
                 X_coin_seq, y_coin_seq = prepare_lstm_data(X_coin, y_coin, args.lstm_sequence_length)
-                
+
                 if len(X_coin_seq) > 0:
                     y_coin_pred = model.predict(X_coin_seq) > 0.5
-                    
+
                     # Get market cap for this coin
                     coin_market_cap = next((s['avg_market_cap'] for s in coin_stats if s['coin_id'] == coin), 0)
-                    
+
                     coin_metrics = {
                         'accuracy': accuracy_score(y_coin_seq, y_coin_pred),
                         'precision': precision_score(y_coin_seq, y_coin_pred, zero_division=0),
@@ -514,7 +513,7 @@ def train_quick_model(args):
                         'total': len(y_coin_seq),
                         'market_cap': coin_market_cap
                     }
-                    
+
                     coin_results[coin] = coin_metrics
 
     # Show best and worst performing test coins
@@ -548,11 +547,11 @@ def train_quick_model(args):
     # Save model and scaler
     if args.model_type == 'lstm':
         # Save Keras model differently
-        model_path = os.path.join(args.model_save_dir, 'quick_model')
+        model_path = os.path.join(args.model_save_dir, 'quick_model.keras')
         model.save(model_path)
     else:
         joblib.dump(model, os.path.join(args.model_save_dir, 'quick_model.joblib'))
-        
+
     joblib.dump(scaler, os.path.join(args.model_save_dir, 'quick_scaler.joblib'))
     joblib.dump(feature_cols, os.path.join(args.model_save_dir, 'quick_features.joblib'))
 
