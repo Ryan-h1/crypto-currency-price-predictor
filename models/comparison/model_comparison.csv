@@ -1,0 +1,5 @@
+Name,Type,Days Ahead,Threshold,Features,Selection,Train Size,Test Size,Runtime (s),Train F1_score,Test F1_score,Train-Test Gap,Timestamp
+20250406_153932_lstm_d30_t15_full_sel-train,lstm,30,0.15,full,train-leader-test-follower,1548,171,1577,0.47536628593177527,0.38914470461448025,0.08622158131729502,2025-04-06 16:05:50
+20250406_153627_xgboost_d30_t15_full_sel-train,xgboost,30,0.15,full,train-leader-test-follower,1548,171,8,0.5101011329813548,0.38310482951769953,0.1269963034636553,2025-04-06 15:36:36
+20250406_153344_random_forest_d30_t15_full_sel-train,random_forest,30,0.15,full,train-leader-test-follower,1548,171,149,0.4528397240494144,0.36955478027078065,0.08328494377863377,2025-04-06 15:36:13
+20250406_153315_logistic_d30_t15_full_sel-train,logistic,30,0.15,full,train-leader-test-follower,1548,171,13,0.3457984081143904,0.3121424439159221,0.03365596419846828,2025-04-06 15:33:29
