@@ -1,0 +1,72 @@
+CRYPTOCURRENCY PREDICTION MODEL FINANCIAL SUMMARY
+Generated: 2025-04-06 19:40:31
+
+OVERALL PERFORMANCE STATISTICS
+Number of models: 4
+Average ROI: 0.13%
+Median ROI: 0.31%
+ROI Range: -0.61% to 0.51%
+
+TOP 3 MODELS BY ROI
+1. 20250406_153932_lstm_d30_t15_full_sel-train (lstm)
+   ROI: 0.51%
+   Profit Factor: 1.14
+   Win Rate: 0.28
+   Volatility: 0.00
+   F1 Score: 0.3891
+
+2. 20250406_153627_xgboost_d30_t15_full_sel-train (xgboost)
+   ROI: 0.42%
+   Profit Factor: 1.12
+   Win Rate: 0.27
+   Volatility: 0.00
+   F1 Score: 0.3831
+
+3. 20250406_153344_random_forest_d30_t15_full_sel-train (random_forest)
+   ROI: 0.19%
+   Profit Factor: 1.05
+   Win Rate: 0.26
+   Volatility: 0.00
+   F1 Score: 0.3696
+
+ROI BY MODEL TYPE
+lstm:
+   Average ROI: 0.51%
+   Best Model: 20250406_153932_lstm_d30_t15_full_sel-train
+   Best ROI: 0.51%
+
+xgboost:
+   Average ROI: 0.42%
+   Best Model: 20250406_153627_xgboost_d30_t15_full_sel-train
+   Best ROI: 0.42%
+
+random_forest:
+   Average ROI: 0.19%
+   Best Model: 20250406_153344_random_forest_d30_t15_full_sel-train
+   Best ROI: 0.19%
+
+logistic:
+   Average ROI: -0.61%
+   Best Model: 20250406_153315_logistic_d30_t15_full_sel-train
+   Best ROI: -0.61%
+
+CORRELATION BETWEEN FINANCIAL AND CLASSIFICATION METRICS
+ROI vs Test F1 Score correlation: 0.9994
+
+
+INVESTMENT IMPLICATIONS
+Based on the model comparison, the following investment strategies are recommended:
+
+1. Primary Strategy: Use 20250406_153932_lstm_d30_t15_full_sel-train (lstm) model
+   - Expected ROI: 0.51%
+   - Win Rate: 0.28
+   - Prediction Threshold: 0.15
+   - Features: full
+
+2. Risk Management:
+   - Average Loss Per Trade: 0.00%
+
+3. Market Cap Considerations:
+   - Best performing market cap segment: 1
+   - Worst performing market cap segment: 2
+   - Consider focusing investments in 1 market cap range
