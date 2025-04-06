@@ -64,11 +64,6 @@ def parse_args():
                         help='Feature set to use for training (minimal: few basic features, '
                              'standard: balanced set of features, full: all available features)')
 
-    parser.add_argument('--validation', type=str, default='coin_split',
-                        choices=['coin_split', 'walk_forward'],
-                        help='Validation strategy: coin_split (train on some coins, test on others) or '
-                             'walk_forward (train on earlier data, test on later data)')
-
     parser.add_argument('--lstm_units', type=int, default=64,
                         help='Number of LSTM units (only used when model_type is lstm)')
 
