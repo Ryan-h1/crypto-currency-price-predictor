@@ -1,44 +1,44 @@
 CRYPTOCURRENCY PREDICTION MODEL FINANCIAL SUMMARY
-Generated: 2025-04-06 19:29:30
+Generated: 2025-04-06 19:40:31
 
 OVERALL PERFORMANCE STATISTICS
-Number of models: 7
-Average ROI: 1.65%
-Median ROI: 0.51%
-ROI Range: -0.61% to 4.16%
+Number of models: 4
+Average ROI: 0.13%
+Median ROI: 0.31%
+ROI Range: -0.61% to 0.51%
 
 TOP 3 MODELS BY ROI
-1. 20250406_192623_xgboost_d30_t100_full_sel-train (xgboost)
-   ROI: 4.16%
-   Profit Factor: 1.91
-   Win Rate: 0.09
+1. 20250406_153932_lstm_d30_t15_full_sel-train (lstm)
+   ROI: 0.51%
+   Profit Factor: 1.14
+   Win Rate: 0.28
    Volatility: 0.00
-   F1 Score: 0.1535
+   F1 Score: 0.3891
 
-2. 20250406_192426_xgboost_d30_t85_full_sel-train (xgboost)
-   ROI: 3.94%
-   Profit Factor: 1.87
-   Win Rate: 0.10
+2. 20250406_153627_xgboost_d30_t15_full_sel-train (xgboost)
+   ROI: 0.42%
+   Profit Factor: 1.12
+   Win Rate: 0.27
    Volatility: 0.00
-   F1 Score: 0.1736
+   F1 Score: 0.3831
 
-3. 20250406_192323_xgboost_d30_t50_full_sel-train (xgboost)
-   ROI: 2.95%
-   Profit Factor: 1.69
-   Win Rate: 0.14
+3. 20250406_153344_random_forest_d30_t15_full_sel-train (random_forest)
+   ROI: 0.19%
+   Profit Factor: 1.05
+   Win Rate: 0.26
    Volatility: 0.00
-   F1 Score: 0.2395
+   F1 Score: 0.3696
 
 ROI BY MODEL TYPE
-xgboost:
-   Average ROI: 2.87%
-   Best Model: 20250406_192623_xgboost_d30_t100_full_sel-train
-   Best ROI: 4.16%
-
 lstm:
    Average ROI: 0.51%
    Best Model: 20250406_153932_lstm_d30_t15_full_sel-train
    Best ROI: 0.51%
+
+xgboost:
+   Average ROI: 0.42%
+   Best Model: 20250406_153627_xgboost_d30_t15_full_sel-train
+   Best ROI: 0.42%
 
 random_forest:
    Average ROI: 0.19%
@@ -51,22 +51,22 @@ logistic:
    Best ROI: -0.61%
 
 CORRELATION BETWEEN FINANCIAL AND CLASSIFICATION METRICS
-ROI vs Test F1 Score correlation: -0.9037
+ROI vs Test F1 Score correlation: 0.9994
 
 
 INVESTMENT IMPLICATIONS
 Based on the model comparison, the following investment strategies are recommended:
 
-1. Primary Strategy: Use 20250406_192623_xgboost_d30_t100_full_sel-train (xgboost) model
-   - Expected ROI: 4.16%
-   - Win Rate: 0.09
-   - Prediction Threshold: 1.00
+1. Primary Strategy: Use 20250406_153932_lstm_d30_t15_full_sel-train (lstm) model
+   - Expected ROI: 0.51%
+   - Win Rate: 0.28
+   - Prediction Threshold: 0.15
    - Features: full
 
 2. Risk Management:
    - Average Loss Per Trade: 0.00%
 
 3. Market Cap Considerations:
-   - Best performing market cap segment: 3
+   - Best performing market cap segment: 1
    - Worst performing market cap segment: 2
-   - Consider focusing investments in 3 market cap range
+   - Consider focusing investments in 1 market cap range
