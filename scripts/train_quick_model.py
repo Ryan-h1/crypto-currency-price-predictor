@@ -33,8 +33,8 @@ def parse_args():
     parser.add_argument('--data_dir', type=str, default='data',
                         help='Directory containing cryptocurrency data CSV files')
 
-    parser.add_argument('--model_save_dir', type=str, default='models/quick',
-                        help='Directory to save trained models')
+    parser.add_argument('--model_save_dir', type=str, default='models',
+                        help='Base directory to save trained models (a unique subdirectory will be created)')
 
     parser.add_argument('--days_ahead', type=int, default=30,
                         help='Number of days to look ahead for prediction')
@@ -186,7 +186,18 @@ def prepare_lstm_data(X, y, sequence_length):
 def train_quick_model(args):
     """Train a quick model with minimal features."""
     start_time = time.time()
-
+    
+    # Create unique model directory with timestamp and config parameters
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    # Create automatic model name based on key parameters
+    auto_model_name = f"{args.model_type}_d{args.days_ahead}_t{int(args.threshold*100)}"
+    auto_model_name += f"_{args.feature_set}_sel-{args.selection.split('-')[0]}"
+    
+    # Create final directory name with timestamp and model info
+    model_dir_name = f"{timestamp}_{auto_model_name}"
+    args.model_save_dir = os.path.join(args.model_save_dir, model_dir_name)
+    
     # Setup logging
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -542,13 +553,13 @@ def train_quick_model(args):
     # Save model and scaler
     if args.model_type == 'lstm':
         # Save Keras model differently
-        model_path = os.path.join(args.model_save_dir, 'quick_model.keras')
+        model_path = os.path.join(args.model_save_dir, 'model.keras')
         model.save(model_path)
     else:
-        joblib.dump(model, os.path.join(args.model_save_dir, 'quick_model.joblib'))
+        joblib.dump(model, os.path.join(args.model_save_dir, 'model.joblib'))
 
-    joblib.dump(scaler, os.path.join(args.model_save_dir, 'quick_scaler.joblib'))
-    joblib.dump(feature_cols, os.path.join(args.model_save_dir, 'quick_features.joblib'))
+    joblib.dump(scaler, os.path.join(args.model_save_dir, 'scaler.joblib'))
+    joblib.dump(feature_cols, os.path.join(args.model_save_dir, 'features.joblib'))
 
     # Save confusion matrix plot
     plt.savefig(os.path.join(args.model_save_dir, 'confusion_matrix.png'))
@@ -605,7 +616,7 @@ def train_quick_model(args):
     }
 
     # Save detailed results
-    with open(os.path.join(args.model_save_dir, 'quick_results.json'), 'w') as f:
+    with open(os.path.join(args.model_save_dir, 'results.json'), 'w') as f:
         json.dump(results, f, indent=2)
 
     # Save additional info for LSTM
