@@ -1,16 +1,18 @@
 import os
 import sys
 import argparse
+import torch
+import random
+import logging
+import torch.nn as nn
 import pandas as pd
 import numpy as np
-import torch
-import torch.nn as nn
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
 from torch.utils.data import DataLoader, Dataset, random_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-import joblib
-import random
-import logging
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -116,22 +118,22 @@ def train(args):
     feature_cols = engineer.get_selected_features(train_df, args.feature_set)
 
     # Critical validation checks
-    # 1. Check if features exist
+    # Check if features exist
     missing_features = [col for col in feature_cols if col not in train_df.columns]
     if missing_features:
         raise ValueError(f"Missing features: {missing_features}. Check feature engineering.")
 
-    # 2. Check for all-NA features
+    # Check for all-NA features
     na_counts = train_df[feature_cols].isna().sum()
     all_na_features = na_counts[na_counts == len(train_df)].index.tolist()
     if all_na_features:
         raise ValueError(f"Features completely NaN: {all_na_features}")
 
-    # 3. Fill remaining NaNs and infinity values
+    # Fill remaining NaNs and infinity values
     train_df[feature_cols] = train_df[feature_cols].fillna(0).replace([np.inf, -np.inf], 0)
     test_df[feature_cols] = test_df[feature_cols].fillna(0).replace([np.inf, -np.inf], 0)
 
-    # 4. Final empty check
+    # Final empty check
     if len(train_df[feature_cols]) == 0:
         raise ValueError("Final feature matrix is empty after NaN handling")
 
