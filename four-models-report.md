@@ -162,7 +162,7 @@ Our financial ROI estimates are based on a simplified trading simulation using t
 - If the prediction is incorrect, we assume a fixed 5% loss on the investment
 - Equal capital allocation across all predicted opportunities
 
-When testing variations of our models, we observed that XGBoost models with higher prediction thresholds (e.g., 50%, 85%, 100%) showed progressively better ROI figures (up to 4.16% for the 100% threshold model). We chose to focus on XGBoost for these threshold tests due to its faster training time compared to LSTM models. While these higher-threshold models showed promising theoretical ROI figures, their extremely low win rates (below 10%) and potential susceptibility to increased volatility make them less reliable for practical implementation.
+When testing variations of our models, we observed that XGBoost models with higher prediction thresholds (e.g., 50%, 85%, 100%) showed progressively better ROI figures (up to 4.16% for the 100% threshold model). We chose to focus on XGBoost for these threshold tests due to its faster training time compared to LSTM models. While these higher-threshold models showed promising theoretical ROI figures, their extremely low win rates (below 10%) and potential susceptibility to increased volatility make them less reliable for practical implementation
 
 It's important to note that actual ROI in real-world trading would vary significantly depending on market conditions, volatility, liquidity constraints, and transaction costs. The ROI figures presented should be interpreted as relative performance indicators rather than absolute expected returns.
 
